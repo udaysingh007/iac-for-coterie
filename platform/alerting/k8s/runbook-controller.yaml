@@ -15,7 +15,7 @@ data:
     import uuid
     from email.mime.text import MIMEText
     from http.server import BaseHTTPRequestHandler, HTTPServer
-    from urllib.parse import urlparse, parse_qs
+    from urllib.parse import urlparse
 
     GMAIL_USER = os.environ["GMAIL_USER"]
     GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
@@ -75,7 +75,7 @@ data:
                     "created_at": time.time(),
                 }
 
-                approve_url = f"{CONTROLLER_EXTERNAL_URL}/approve?token={token}"
+                approve_url = f"{CONTROLLER_EXTERNAL_URL}/approve/{token}"
                 subject = "Canary Alert - Approval Required for Remediation"
                 body_html = f"""
                 <h2>Canary Pod Alert Fired</h2>
@@ -108,10 +108,10 @@ data:
 
         def do_GET(self):
             parsed = urlparse(self.path)
+            path = parsed.path.rstrip("/")
 
-            if parsed.path == "/approve":
-                params = parse_qs(parsed.query)
-                token = params.get("token", [None])[0]
+            if path.startswith("/approve/"):
+                token = path.split("/approve/", 1)[1]
 
                 if not token or token not in pending_approvals:
                     self.send_response(400)

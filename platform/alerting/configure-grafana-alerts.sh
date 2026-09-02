@@ -79,6 +79,8 @@ curl -sf -X POST "${GRAFANA_URL}/api/v1/provisioning/alert-rules" \
   "ruleGroup": "canary-alerts",
   "title": "Canary Pod High Restart Count",
   "condition": "C",
+  "noDataState": "NoData",
+  "execErrState": "Error",
   "for": "30s",
   "data": [
     {
