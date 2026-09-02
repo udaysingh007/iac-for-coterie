@@ -1,0 +1,68 @@
+name: Platform — Observability Stack
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "platform/observability/**"
+      - ".github/workflows/observability.yml"
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Action to run"
+        required: true
+        default: "deploy"
+        type: choice
+        options: [deploy, uninstall]
+
+jobs:
+  deploy:
+    name: ${{ github.event.inputs.action || 'deploy' }} kube-prometheus-stack
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copy values file to VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ vars.VM_PUBLIC_IP }}
+          username: ubuntu
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          source: "platform/observability/values.yaml,platform/observability/install.sh"
+          target: "/home/ubuntu/platform/"
+          strip_components: 0
+
+      - name: Deploy observability stack
+        if: github.event.inputs.action != 'uninstall'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ vars.VM_PUBLIC_IP }}
+          username: ubuntu
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          envs: GRAFANA_ADMIN_PASSWORD
+          script: |
+            chmod +x /home/ubuntu/platform/platform/observability/install.sh
+            export GRAFANA_ADMIN_PASSWORD="${GRAFANA_ADMIN_PASSWORD}"
+            bash /home/ubuntu/platform/platform/observability/install.sh
+        env:
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+
+      - name: Uninstall observability stack
+        if: github.event.inputs.action == 'uninstall'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ vars.VM_PUBLIC_IP }}
+          username: ubuntu
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          script: |
+            helm uninstall kube-prometheus-stack --namespace monitoring || true
+            kubectl delete namespace monitoring --ignore-not-found
+
+      - name: Print Grafana URL
+        if: github.event.inputs.action != 'uninstall'
+        run: |
+          echo "Grafana: http://${{ vars.VM_PUBLIC_IP }}/"
+          echo "Username: admin"
+          echo "Password: (GRAFANA_ADMIN_PASSWORD secret)"

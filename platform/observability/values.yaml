@@ -1,0 +1,94 @@
+# kube-prometheus-stack Helm values
+# Sized for a single t3.medium node (2 vCPU / 4 GB RAM) running k3s.
+# Deploy via: .github/workflows/observability.yml
+
+# -------------------------------------------------------------------------
+# Grafana
+# -------------------------------------------------------------------------
+grafana:
+  enabled: true
+
+  # Admin credentials — password is injected at deploy time via
+  # --set grafana.adminPassword from the GRAFANA_ADMIN_PASSWORD GitHub secret.
+  adminUser: admin
+
+  # Traefik Ingress (k3s default ingress controller) on port 80.
+  # Accessible at http://<VM_PUBLIC_IP>/ with no domain name required.
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: web
+    hosts:
+      - ""   # empty host = match any IP/hostname
+    paths:
+      - /
+    pathType: Prefix
+
+  grafana.ini:
+    server:
+      root_url: "%(protocol)s://%(domain)s/"
+      serve_from_sub_path: false
+
+  # Pre-configure the Prometheus datasource automatically
+  sidecar:
+    datasources:
+      enabled: true
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+
+  # Persist dashboards across pod restarts
+  persistence:
+    enabled: false  # ephemeral is fine for a 30-day grading environment
+
+# -------------------------------------------------------------------------
+# Prometheus
+# -------------------------------------------------------------------------
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    resources:
+      requests:
+        cpu: 200m
+        memory: 400Mi
+      limits:
+        cpu: 500m
+        memory: 800Mi
+    # Avoid scheduling issues on single-node; no replica needed
+    replicas: 1
+    storageSpec: {}  # in-memory / ephemeral — fine for this assessment
+
+# -------------------------------------------------------------------------
+# Alertmanager — disabled (not required for this assessment)
+# -------------------------------------------------------------------------
+alertmanager:
+  enabled: false
+
+# -------------------------------------------------------------------------
+# Supporting components
+# -------------------------------------------------------------------------
+nodeExporter:
+  enabled: true
+
+kubeStateMetrics:
+  enabled: true
+
+# k3s uses a non-standard path for the scheduler and controller-manager —
+# disable the components that scrape kube-apiserver internals which aren't
+# exposed the same way on k3s as on full Kubernetes.
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
