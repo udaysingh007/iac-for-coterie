@@ -19,7 +19,7 @@ variable "subnet_cidr" {
 variable "instance_type" {
   description = "EC2 instance type — t3.medium gives 2 vCPU / 4 GB at ~$0.047/hr"
   type        = string
-  default     = "t3.medium"
+  default     = "r6i.xlarge"
 }
 
 variable "root_volume_size_gb" {
