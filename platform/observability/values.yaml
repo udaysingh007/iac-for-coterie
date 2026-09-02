@@ -33,6 +33,11 @@ grafana:
       # WAL mode prevents SQLite_BUSY locking when sidecars and the main
       # process access the DB concurrently (a common issue in Grafana 11+).
       wal: true
+    feature_toggles:
+      # Grafana 11+ kubernetesDashboards causes heavy SQLite contention on
+      # single-node SQLite installs. Disable it; dashboards still work fine
+      # via the classic provisioning path.
+      kubernetesDashboards: false
 
   # Pre-configure the Prometheus datasource automatically
   sidecar:
