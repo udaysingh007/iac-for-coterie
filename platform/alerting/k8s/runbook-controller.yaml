@@ -116,17 +116,24 @@ data:
                 if not token or token not in pending_approvals:
                     self.send_response(400)
                     self.end_headers()
-                    self.wfile.write(b"<h2>Invalid or expired token.</h2>")
+                    self.wfile.write(b"""
+                    <html><body style="font-family:sans-serif;max-width:600px;margin:40px auto;">
+                    <h2 style="color:#dc3545;">Invalid or Expired Token</h2>
+                    <p>This approval link is no longer valid.</p>
+                    </body></html>""")
                     return
 
                 entry = pending_approvals[token]
                 if entry["status"] != "pending":
                     self.send_response(200)
                     self.end_headers()
-                    self.wfile.write(
-                        f"<h2>Already processed.</h2><p>Status: {entry['status']}</p>"
-                        f"<pre>{entry.get('result', '')}</pre>".encode()
-                    )
+                    self.wfile.write(f"""
+                    <html><body style="font-family:sans-serif;max-width:600px;margin:40px auto;">
+                    <h2 style="color:#6c757d;">Already Processed</h2>
+                    <p><strong>Status:</strong> {entry['status']}</p>
+                    <h3>Output:</h3>
+                    <pre>{entry.get('result', '')}</pre>
+                    </body></html>""".encode())
                     return
 
                 entry["status"] = "approved"
