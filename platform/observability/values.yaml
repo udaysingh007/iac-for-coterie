@@ -29,6 +29,10 @@ grafana:
     server:
       root_url: "%(protocol)s://%(domain)s/"
       serve_from_sub_path: false
+    database:
+      # WAL mode prevents SQLite_BUSY locking when sidecars and the main
+      # process access the DB concurrently (a common issue in Grafana 11+).
+      wal: true
 
   # Pre-configure the Prometheus datasource automatically
   sidecar:
