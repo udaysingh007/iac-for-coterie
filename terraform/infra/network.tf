@@ -1,134 +1,123 @@
-resource "azurerm_resource_group" "main" {
-  name     = var.resource_group_name
-  location = var.location
-  tags     = var.tags
+# ---------------------------------------------------------------------------
+# VPC
+# ---------------------------------------------------------------------------
+
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  tags                 = merge(var.tags, { Name = "${var.name_prefix}-vpc" })
 }
 
-resource "azurerm_virtual_network" "main" {
-  name                = "vnet-coterie"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
-  address_space       = ["10.0.0.0/16"]
-  tags                = var.tags
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+  tags   = merge(var.tags, { Name = "${var.name_prefix}-igw" })
 }
 
-resource "azurerm_subnet" "main" {
-  name                 = "snet-coterie"
-  resource_group_name  = azurerm_resource_group.main.name
-  virtual_network_name = azurerm_virtual_network.main.name
-  address_prefixes     = ["10.0.1.0/24"]
+# ---------------------------------------------------------------------------
+# Public subnet
+# ---------------------------------------------------------------------------
+
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.subnet_cidr
+  map_public_ip_on_launch = false # we use an Elastic IP instead
+  tags                    = merge(var.tags, { Name = "${var.name_prefix}-public-subnet" })
 }
 
-resource "azurerm_network_security_group" "main" {
-  name                = "nsg-coterie-vm"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
-  tags                = var.tags
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+  tags   = merge(var.tags, { Name = "${var.name_prefix}-public-rt" })
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+}
+
+resource "aws_route_table_association" "public" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
+}
+
+# ---------------------------------------------------------------------------
+# Security group
+# ---------------------------------------------------------------------------
+
+resource "aws_security_group" "vm" {
+  name        = "${var.name_prefix}-vm-sg"
+  description = "Allow SSH, HTTP/S, k3s API, Grafana, Prometheus, NodePort"
+  vpc_id      = aws_vpc.main.id
+  tags        = merge(var.tags, { Name = "${var.name_prefix}-vm-sg" })
 
   # SSH
-  security_rule {
-    name                       = "allow-ssh"
-    priority                   = 100
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "22"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
+  ingress {
+    description = "SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # HTTP
-  security_rule {
-    name                       = "allow-http"
-    priority                   = 110
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "80"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
+  ingress {
+    description = "HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # HTTPS
-  security_rule {
-    name                       = "allow-https"
-    priority                   = 120
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "443"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
+  ingress {
+    description = "HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # k3s API server
-  security_rule {
-    name                       = "allow-k3s-api"
-    priority                   = 130
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "6443"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
+  ingress {
+    description = "k3s API"
+    from_port   = 6443
+    to_port     = 6443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # Grafana
-  security_rule {
-    name                       = "allow-grafana"
-    priority                   = 140
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "3000"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
+  ingress {
+    description = "Grafana"
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # Prometheus
-  security_rule {
-    name                       = "allow-prometheus"
-    priority                   = 150
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "9090"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
+  ingress {
+    description = "Prometheus"
+    from_port   = 9090
+    to_port     = 9090
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # k3s NodePort range
-  security_rule {
-    name                       = "allow-nodeport"
-    priority                   = 160
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "30000-32767"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
+  ingress {
+    description = "NodePort"
+    from_port   = 30000
+    to_port     = 32767
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
-}
 
-resource "azurerm_subnet_network_security_group_association" "main" {
-  subnet_id                 = azurerm_subnet.main.id
-  network_security_group_id = azurerm_network_security_group.main.id
-}
-
-resource "azurerm_public_ip" "main" {
-  name                = "pip-coterie-vm"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
-  allocation_method   = "Static"
-  sku                 = "Standard"
-  # Gives a free FQDN: coterie-vm.eastus.cloudapp.azure.com
-  domain_name_label   = var.vm_name
-  tags                = var.tags
+  # All outbound
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }

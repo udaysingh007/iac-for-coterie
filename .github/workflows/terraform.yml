@@ -26,33 +26,25 @@ permissions:
 
 env:
   TF_DIR: terraform/infra
-  ARM_USE_OIDC: "true"
-  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
   TF_VAR_admin_ssh_public_key: ${{ secrets.ADMIN_SSH_PUBLIC_KEY }}
-  TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
 jobs:
   terraform:
     name: Terraform ${{ github.event.inputs.action || (github.event_name == 'pull_request' && 'plan') || 'apply' }}
     runs-on: ubuntu-latest
-    environment: ${{ (github.event.inputs.action == 'apply' || github.event.inputs.action == 'destroy' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) && 'production' || '' }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Fetch full history so we can push the updated state back
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Azure login via OIDC
-        uses: azure/login@v2
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -80,7 +72,6 @@ jobs:
             -out=tfplan \
             -input=false \
             -no-color 2>&1 | tee plan.txt
-          echo "exitcode=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
 
       - name: Post Plan to PR
         if: github.event_name == 'pull_request'
@@ -117,10 +108,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Pull latest to avoid conflicts (state is only written by this workflow)
           git pull --rebase origin main
-
           git add terraform/infra/terraform.tfstate
           if git diff --cached --quiet; then
             echo "No state changes to commit."

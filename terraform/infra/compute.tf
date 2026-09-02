@@ -1,75 +1,87 @@
-resource "azurerm_network_interface" "main" {
-  name                = "nic-coterie-vm"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
-  tags                = var.tags
+# ---------------------------------------------------------------------------
+# Ubuntu 22.04 LTS AMI (latest, Canonical-owned)
+# ---------------------------------------------------------------------------
 
-  ip_configuration {
-    name                          = "internal"
-    subnet_id                     = azurerm_subnet.main.id
-    private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.main.id
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"] # Canonical
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
   }
 }
 
-resource "azurerm_linux_virtual_machine" "main" {
-  name                            = var.vm_name
-  resource_group_name             = azurerm_resource_group.main.name
-  location                        = azurerm_resource_group.main.location
-  size                            = var.vm_size
-  admin_username                  = var.admin_username
-  disable_password_authentication = true
-  tags                            = var.tags
+# ---------------------------------------------------------------------------
+# SSH key pair
+# ---------------------------------------------------------------------------
 
-  network_interface_ids = [
-    azurerm_network_interface.main.id,
-  ]
+resource "aws_key_pair" "main" {
+  key_name   = "${var.name_prefix}-key"
+  public_key = var.admin_ssh_public_key
+  tags       = var.tags
+}
 
-  admin_ssh_key {
-    username   = var.admin_username
-    public_key = var.admin_ssh_public_key
+# ---------------------------------------------------------------------------
+# EC2 instance
+# ---------------------------------------------------------------------------
+
+resource "aws_instance" "main" {
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = var.instance_type
+  subnet_id              = aws_subnet.public.id
+  vpc_security_group_ids = [aws_security_group.vm.id]
+  key_name               = aws_key_pair.main.key_name
+
+  root_block_device {
+    volume_type           = "gp3"
+    volume_size           = var.root_volume_size_gb
+    delete_on_termination = true
   }
 
-  os_disk {
-    name                 = "osdisk-coterie-vm"
-    caching              = "ReadWrite"
-    storage_account_type = "StandardSSD_LRS"
-    disk_size_gb         = var.os_disk_size_gb
-  }
+  # cloud-init: install k3s + Helm on first boot
+  user_data = <<-CLOUDINIT
+    #!/bin/bash
+    set -e
+    apt-get update -y
+    apt-get upgrade -y
+    apt-get install -y curl wget git jq unzip apt-transport-https ca-certificates gnupg
 
-  # Ubuntu 22.04 LTS Gen2
-  source_image_reference {
-    publisher = "Canonical"
-    offer     = "0001-com-ubuntu-server-jammy"
-    sku       = "22_04-lts-gen2"
-    version   = "latest"
-  }
+    # Install k3s (single-node Kubernetes)
+    curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644
 
-  # cloud-init: install common tools needed before the assessment workload
-  custom_data = base64encode(<<-CLOUDINIT
-    #cloud-config
-    package_update: true
-    package_upgrade: true
-    packages:
-      - curl
-      - wget
-      - git
-      - apt-transport-https
-      - ca-certificates
-      - gnupg
-      - lsb-release
-      - jq
-      - unzip
-    runcmd:
-      # Install k3s (single-node Kubernetes)
-      - curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644
-      # Install Helm
-      - curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-      # Allow azureuser to use kubectl without sudo
-      - mkdir -p /home/${var.admin_username}/.kube
-      - cp /etc/rancher/k3s/k3s.yaml /home/${var.admin_username}/.kube/config
-      - chown -R ${var.admin_username}:${var.admin_username} /home/${var.admin_username}/.kube
-      - sed -i 's|server: https://127.0.0.1:6443|server: https://127.0.0.1:6443|g' /home/${var.admin_username}/.kube/config
-    CLOUDINIT
-  )
+    # Install Helm
+    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+    # Allow ubuntu user to use kubectl without sudo
+    mkdir -p /home/${var.admin_username}/.kube
+    cp /etc/rancher/k3s/k3s.yaml /home/${var.admin_username}/.kube/config
+    chown -R ${var.admin_username}:${var.admin_username} /home/${var.admin_username}/.kube
+  CLOUDINIT
+
+  tags = merge(var.tags, { Name = "${var.name_prefix}-vm" })
+}
+
+# ---------------------------------------------------------------------------
+# Elastic IP (static public IP)
+# ---------------------------------------------------------------------------
+
+resource "aws_eip" "main" {
+  domain = "vpc"
+  tags   = merge(var.tags, { Name = "${var.name_prefix}-eip" })
+}
+
+resource "aws_eip_association" "main" {
+  instance_id   = aws_instance.main.id
+  allocation_id = aws_eip.main.id
 }

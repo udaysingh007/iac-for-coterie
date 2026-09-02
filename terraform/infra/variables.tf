@@ -1,54 +1,54 @@
-variable "subscription_id" {
-  description = "Azure subscription ID"
+variable "aws_region" {
+  description = "AWS region for all infra resources"
   type        = string
-  default     = "010861c7-fcee-496f-b732-b852d41ab668"
+  default     = "us-east-1"
 }
 
-variable "location" {
-  description = "Azure region for all infra resources"
+variable "vpc_cidr" {
+  description = "CIDR block for the VPC"
   type        = string
-  default     = "eastus"
+  default     = "10.0.0.0/16"
 }
 
-variable "resource_group_name" {
-  description = "Name of the resource group that holds all infra"
+variable "subnet_cidr" {
+  description = "CIDR block for the public subnet"
   type        = string
-  default     = "rg-coterie-vm"
+  default     = "10.0.1.0/24"
 }
 
-variable "vm_name" {
-  description = "Name of the virtual machine (also used as DNS label prefix)"
+variable "instance_type" {
+  description = "EC2 instance type — t3.medium gives 2 vCPU / 4 GB at ~$0.047/hr"
   type        = string
-  default     = "coterie-vm"
+  default     = "t3.medium"
 }
 
-variable "vm_size" {
-  description = "Azure VM SKU — Standard_B2s gives 2 vCPU / 4 GB RAM at ~$0.05/hr"
-  type        = string
-  default     = "Standard_B2s"
-}
-
-variable "os_disk_size_gb" {
-  description = "OS disk size in GB"
+variable "root_volume_size_gb" {
+  description = "Root EBS volume size in GB"
   type        = number
   default     = 30
 }
 
 variable "admin_username" {
-  description = "Admin username for SSH access"
+  description = "Default SSH username for Ubuntu AMIs"
   type        = string
-  default     = "azureuser"
+  default     = "ubuntu"
 }
 
 variable "admin_ssh_public_key" {
   description = <<-EOT
-    SSH public key to authorise on the VM (contents of ~/.ssh/id_rsa.pub or similar).
-    In GitHub Actions, set the secret ADMIN_SSH_PUBLIC_KEY and the workflow will
-    pass it as TF_VAR_admin_ssh_public_key.
-    Locally, add it to terraform/infra/terraform.tfvars (gitignored).
+    SSH public key to authorise on the instance (contents of ~/.ssh/coterie_vm_key.pub).
+    In GitHub Actions, set the secret ADMIN_SSH_PUBLIC_KEY — the workflow passes it
+    as TF_VAR_admin_ssh_public_key.
+    Locally, export TF_VAR_admin_ssh_public_key="$(cat ~/.ssh/coterie_vm_key.pub)".
   EOT
   type        = string
   sensitive   = true
+}
+
+variable "name_prefix" {
+  description = "Prefix applied to all resource names"
+  type        = string
+  default     = "coterie"
 }
 
 variable "tags" {

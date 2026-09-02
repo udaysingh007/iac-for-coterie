@@ -2,9 +2,9 @@ terraform {
   required_version = ">= 1.5"
 
   required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 3.117"
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
     }
   }
 
@@ -15,19 +15,9 @@ terraform {
   }
 }
 
-# When running in GitHub Actions, ARM_USE_OIDC=true and ARM_CLIENT_ID /
-# ARM_TENANT_ID / ARM_SUBSCRIPTION_ID are injected by the workflow.
-# When running locally, ambient `az login` credentials are used.
-provider "azurerm" {
-  subscription_id = var.subscription_id
-  features {
-    resource_group {
-      prevent_deletion_if_contains_resources = false
-    }
-    virtual_machine {
-      delete_os_disk_on_deletion     = true
-      graceful_shutdown              = false
-      skip_shutdown_and_force_delete = false
-    }
-  }
+# When running in GitHub Actions, credentials come from OIDC via
+# aws-actions/configure-aws-credentials (no static keys stored).
+# When running locally, ambient AWS CLI credentials (cliuser) are used.
+provider "aws" {
+  region = var.aws_region
 }
