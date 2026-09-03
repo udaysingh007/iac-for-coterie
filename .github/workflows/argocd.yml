@@ -1,11 +1,11 @@
-name: Platform — Observability Stack
+name: Platform — ArgoCD
 
 on:
   push:
     branches: [main]
     paths:
-      - "platform/observability/**"
-      - ".github/workflows/observability.yml"
+      - "platform/argocd/**"
+      - ".github/workflows/argocd.yml"
   workflow_dispatch:
     inputs:
       action:
@@ -17,7 +17,7 @@ on:
 
 jobs:
   deploy:
-    name: ${{ github.event.inputs.action || 'deploy' }} kube-prometheus-stack
+    name: ${{ github.event.inputs.action || 'deploy' }} argocd
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +28,7 @@ jobs:
           host: ${{ vars.VM_PUBLIC_IP }}
           username: ubuntu
           key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
-          source: "platform/observability/values.yaml,platform/observability/install.sh"
+          source: "platform/argocd/"
           target: "/home/ubuntu/platform/"
           strip_components: 0
 
@@ -39,13 +39,10 @@ jobs:
           host: ${{ vars.VM_PUBLIC_IP }}
           username: ubuntu
           key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
-          envs: GRAFANA_ADMIN_PASSWORD
           script: |
-            chmod +x /home/ubuntu/platform/platform/observability/install.sh
-            export GRAFANA_ADMIN_PASSWORD="${GRAFANA_ADMIN_PASSWORD}"
-            bash /home/ubuntu/platform/platform/observability/install.sh
-        env:
-          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+            chmod +x /home/ubuntu/platform/platform/argocd/install.sh
+            bash /home/ubuntu/platform/platform/argocd/install.sh
+        timeout: 600s
 
       - name: Uninstall
         if: github.event.inputs.action == 'uninstall'
@@ -55,11 +52,11 @@ jobs:
           username: ubuntu
           key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
           script: |
-            helm uninstall kube-prometheus-stack --namespace monitoring || true
-            kubectl delete namespace monitoring --ignore-not-found
+            helm uninstall argocd --namespace argocd || true
+            kubectl delete namespace argocd --ignore-not-found
 
-      - name: Print Grafana URL
+      - name: Print ArgoCD URL
         if: github.event.inputs.action != 'uninstall'
         run: |
-          echo "Grafana: http://${{ vars.VM_PUBLIC_IP }}/grafana"
+          echo "ArgoCD: http://${{ vars.VM_PUBLIC_IP }}/argocd"
           echo "Username: admin"

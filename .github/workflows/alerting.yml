@@ -1,0 +1,74 @@
+name: Platform — Alerting & Runbooks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "platform/alerting/**"
+      - ".github/workflows/alerting.yml"
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Action to run"
+        required: true
+        default: "deploy"
+        type: choice
+        options: [deploy, uninstall]
+
+jobs:
+  deploy:
+    name: ${{ github.event.inputs.action || 'deploy' }} alerting stack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy files to VM
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ vars.VM_PUBLIC_IP }}
+          username: ubuntu
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          source: "platform/alerting/"
+          target: "/home/ubuntu/platform/"
+          strip_components: 0
+
+      - name: Deploy k8s resources
+        if: github.event.inputs.action != 'uninstall'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ vars.VM_PUBLIC_IP }}
+          username: ubuntu
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          envs: GRAFANA_ADMIN_PASSWORD
+          script: |
+            SCRIPT_DIR="/home/ubuntu/platform/platform/alerting"
+
+            # Apply k8s manifests (namespace, canary, runbook-controller)
+            kubectl apply -f "$SCRIPT_DIR/k8s/namespace.yaml"
+            kubectl apply -f "$SCRIPT_DIR/k8s/canary.yaml"
+            kubectl apply -f "$SCRIPT_DIR/k8s/runbook-controller.yaml"
+
+            echo "Waiting for pods..."
+            kubectl wait --for=condition=ready pod -l app=runbook-controller -n alerting --timeout=120s || true
+            kubectl get pods -n alerting
+
+            # Configure Grafana alerts (non-interactive)
+            if [ -n "${GRAFANA_ADMIN_PASSWORD}" ]; then
+              chmod +x "$SCRIPT_DIR/configure-grafana-alerts.sh"
+              bash "$SCRIPT_DIR/configure-grafana-alerts.sh" "http://localhost/grafana" "${GRAFANA_ADMIN_PASSWORD}"
+            else
+              echo "GRAFANA_ADMIN_PASSWORD not set — skipping Grafana alert configuration"
+            fi
+        env:
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+
+      - name: Uninstall
+        if: github.event.inputs.action == 'uninstall'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ vars.VM_PUBLIC_IP }}
+          username: ubuntu
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          script: |
+            kubectl delete -f /home/ubuntu/platform/platform/alerting/k8s/ || true
+            kubectl delete namespace alerting --ignore-not-found
