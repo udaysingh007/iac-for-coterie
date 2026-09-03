@@ -7,7 +7,8 @@ resource "aws_iam_openid_connect_provider" "github_actions" {
   client_id_list  = ["sts.amazonaws.com"]
   # Thumbprint list — GitHub's current TLS root CA thumbprint.
   # AWS validates OIDC tokens against this; update if GitHub rotates their CA.
-  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1",
+  thumbprint_list = ["227203b5317f3818cab5b5ce596132bf36748c0e",
+  "6938fd4d98bab03faadb97b34396831e3780aea1",
   "1c58a3a8518e8759bf075b76b750d4f2df264fcd"]
 }
 
