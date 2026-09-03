@@ -68,5 +68,5 @@ jobs:
       - name: Print Grafana URL
         if: github.event.inputs.action != 'uninstall'
         run: |
-          echo "Grafana: http://${{ vars.VM_PUBLIC_IP }}/"
+          echo "Grafana: http://${{ vars.VM_PUBLIC_IP }}/grafana"
           echo "Username: admin"

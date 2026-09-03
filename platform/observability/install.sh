@@ -44,6 +44,6 @@ kubectl rollout status deployment/"$RELEASE-grafana" \
 
 echo ""
 echo "==> Grafana is available at:"
-echo "    http://$(curl -sf http://checkip.amazonaws.com || echo '<VM_PUBLIC_IP>')/"
+echo "    http://$(curl -sf http://checkip.amazonaws.com || echo '<VM_PUBLIC_IP>')/grafana"
 echo "    Username: admin"
 echo "    Password: (set via GRAFANA_ADMIN_PASSWORD)"
