@@ -39,10 +39,10 @@ jobs:
           host: ${{ vars.VM_PUBLIC_IP }}
           username: ubuntu
           key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          command_timeout: 10m
           script: |
             chmod +x /home/ubuntu/platform/platform/argocd/install.sh
             bash /home/ubuntu/platform/platform/argocd/install.sh
-        timeout: 600s
 
       - name: Uninstall
         if: github.event.inputs.action == 'uninstall'
