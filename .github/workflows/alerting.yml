@@ -43,9 +43,8 @@ jobs:
           script: |
             SCRIPT_DIR="/home/ubuntu/platform/platform/alerting"
 
-            # Apply k8s manifests (namespace, canary, runbook-controller)
+            # Apply k8s manifests (namespace, runbook-controller)
             kubectl apply -f "$SCRIPT_DIR/k8s/namespace.yaml"
-            kubectl apply -f "$SCRIPT_DIR/k8s/canary.yaml"
             kubectl apply -f "$SCRIPT_DIR/k8s/runbook-controller.yaml"
 
             echo "Waiting for pods..."

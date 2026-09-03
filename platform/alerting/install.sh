@@ -3,8 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-echo "=== Alerting Demo Setup ==="
-echo "No Docker needed — uses python:3.12-alpine image + ConfigMaps."
+echo "=== Alerting & Runbook Setup ==="
 echo ""
 
 # --- 1. Create namespace ---
@@ -21,8 +20,7 @@ if ! kubectl get secret gmail-credentials -n alerting &>/dev/null; then
   exit 1
 fi
 
-# --- 3. Deploy canary + runbook controller ---
-kubectl apply -f "$SCRIPT_DIR/k8s/canary.yaml"
+# --- 3. Deploy runbook controller ---
 kubectl apply -f "$SCRIPT_DIR/k8s/runbook-controller.yaml"
 
 # --- 4. Wait for pods ---
@@ -49,14 +47,12 @@ echo "=== Setup Complete ==="
 echo ""
 echo "IMPORTANT: Ensure AWS Security Group allows inbound TCP 30080 from your IP."
 echo ""
-echo "Timeline:"
-echo "  - Canary pod starts healthy"
-echo "  - After ~2 minutes, /healthz returns 503"
-echo "  - After ~30s of failures, k8s restarts the pod"
-echo "  - Prometheus picks up restart count increase"
-echo "  - Grafana alert fires and sends webhook to runbook-controller"
-echo "  - Runbook-controller emails you an approval link"
-echo "  - Click the link -> pod gets restarted -> healthy again"
+echo "How the runbook demo works:"
+echo "  1. Deploy candidate-api with chaos mode enabled (uncomment in Program.cs)"
+echo "  2. After ~5 minutes, /api/work-items starts returning 500 errors"
+echo "  3. Availability SLO drops below 99.9%"
+echo "  4. Grafana alert fires and sends webhook to runbook-controller"
+echo "  5. Runbook-controller emails you an approval link"
+echo "  6. Click the link -> deployment rolls back to previous version -> healthy again"
 echo ""
-echo "Monitor:"
-echo "  kubectl get pods -n alerting -w"
+echo "Pending approvals page: http://13.216.126.57:30080/pending"
