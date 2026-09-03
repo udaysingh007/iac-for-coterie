@@ -82,9 +82,7 @@ grafana:
       traefik.ingress.kubernetes.io/router.entrypoints: web
     hosts:
       - ""
-    paths:
-      - /grafana
-    pathType: Prefix
+    path: /grafana
 
 # -------------------------------------------------------------------------
 # Prometheus

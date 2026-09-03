@@ -20,7 +20,9 @@ data:
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
         .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; text-decoration: none; color: inherit; transition: border-color 0.2s, transform 0.2s; }
         .card:hover { border-color: #60a5fa; transform: translateY(-2px); }
-        .card-icon { font-size: 2rem; margin-bottom: 0.75rem; }
+        .card-icon { margin-bottom: 0.75rem; height: 40px; display: flex; align-items: center; }
+        .card-icon img { height: 36px; width: auto; }
+        .card-icon span { font-size: 2rem; }
         .card-title { font-size: 1.1rem; font-weight: 600; color: #f1f5f9; margin-bottom: 0.25rem; }
         .card-desc { font-size: 0.85rem; color: #94a3b8; }
         .env-dev { border-left: 3px solid #22c55e; }
@@ -34,22 +36,22 @@ data:
         <p class="subtitle">SRE Take-Home Assessment &mdash; Infrastructure Dashboard</p>
         <div class="grid">
           <a href="/grafana" class="card">
-            <div class="card-icon">&#x1F4CA;</div>
+            <div class="card-icon"><img src="/grafana/public/img/grafana_icon.svg" alt="Grafana"></div>
             <div class="card-title">Grafana</div>
             <div class="card-desc">Monitoring dashboards, metrics, and SLO tracking</div>
           </a>
           <a href="/argocd" class="card">
-            <div class="card-icon">&#x1F500;</div>
+            <div class="card-icon"><img src="/argocd/assets/images/logo.png" alt="ArgoCD"></div>
             <div class="card-title">ArgoCD</div>
             <div class="card-desc">GitOps continuous delivery and deployment status</div>
           </a>
           <a href="/dev/" class="card env-dev">
-            <div class="card-icon">&#x1F6A7;</div>
+            <div class="card-icon"><span>&#x1F6A7;</span></div>
             <div class="card-title">Dev Environment</div>
             <div class="card-desc">Candidate API &mdash; development deployment</div>
           </a>
           <a href="/test/" class="card env-test">
-            <div class="card-icon">&#x2705;</div>
+            <div class="card-icon"><span>&#x2705;</span></div>
             <div class="card-title">Test Environment</div>
             <div class="card-desc">Candidate API &mdash; promoted/validated build</div>
           </a>
