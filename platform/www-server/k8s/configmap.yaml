@@ -55,6 +55,11 @@ data:
             <div class="card-title">Test Environment</div>
             <div class="card-desc">Candidate API &mdash; promoted/validated build</div>
           </a>
+          <a href="http://13.216.126.57:30080/pending" class="card" style="border-left: 3px solid #ef4444;">
+            <div class="card-icon"><span>&#x1F6A8;</span></div>
+            <div class="card-title">Alert Approvals</div>
+            <div class="card-desc">Alerts requiring manual review and approval for remediation</div>
+          </a>
         </div>
         <div class="footer">k3s on AWS EC2 &bull; Prometheus + Grafana &bull; ArgoCD</div>
       </div>

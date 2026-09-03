@@ -59,44 +59,43 @@ else
   echo " -> Created folder UID: $FOLDER_UID"
 fi
 
-# --- 4. Create alert rule ---
-echo "Creating alert rule..."
-
-# Get the Prometheus datasource UID
+# --- 4. Get the Prometheus datasource UID ---
 PROM_UID=$(curl -sf "${GRAFANA_URL}/api/datasources/name/Prometheus" \
   -u "$AUTH" | python3 -c "import sys,json; print(json.load(sys.stdin)['uid'])")
 echo "  Prometheus datasource UID: $PROM_UID"
 
+# --- 5. Create candidate-api error rate alert rule ---
+echo "Creating candidate-api error rate alert rule..."
 curl -sf -X POST "${GRAFANA_URL}/api/v1/provisioning/alert-rules" \
   -u "$AUTH" \
   -H "Content-Type: application/json" \
   -H "X-Disable-Provenance: true" \
   -d "$(cat <<EOF
 {
-  "uid": "canary-restart-alert",
+  "uid": "candidate-api-error-alert",
   "orgID": 1,
   "folderUID": "${FOLDER_UID}",
-  "ruleGroup": "canary-alerts",
-  "title": "Canary Pod High Restart Count",
+  "ruleGroup": "candidate-api-alerts",
+  "title": "CandidateApi High Error Rate",
   "condition": "C",
-  "noDataState": "NoData",
+  "noDataState": "OK",
   "execErrState": "Error",
-  "for": "30s",
+  "for": "2m",
   "data": [
     {
       "refId": "A",
-      "relativeTimeRange": {"from": 300, "to": 0},
+      "relativeTimeRange": {"from": 600, "to": 0},
       "datasourceUid": "${PROM_UID}",
       "model": {
-        "expr": "increase(kube_pod_container_status_restarts_total{namespace=\"alerting\", container=\"canary\"}[5m])",
-        "instant": false,
-        "range": true,
+        "expr": "candidate_api:availability:ratio5m",
+        "instant": true,
+        "range": false,
         "refId": "A"
       }
     },
     {
       "refId": "B",
-      "relativeTimeRange": {"from": 300, "to": 0},
+      "relativeTimeRange": {"from": 600, "to": 0},
       "datasourceUid": "__expr__",
       "model": {
         "type": "reduce",
@@ -107,7 +106,7 @@ curl -sf -X POST "${GRAFANA_URL}/api/v1/provisioning/alert-rules" \
     },
     {
       "refId": "C",
-      "relativeTimeRange": {"from": 300, "to": 0},
+      "relativeTimeRange": {"from": 600, "to": 0},
       "datasourceUid": "__expr__",
       "model": {
         "type": "threshold",
@@ -115,8 +114,8 @@ curl -sf -X POST "${GRAFANA_URL}/api/v1/provisioning/alert-rules" \
         "conditions": [
           {
             "evaluator": {
-              "type": "gt",
-              "params": [1]
+              "type": "lt",
+              "params": [0.999]
             }
           }
         ],
@@ -124,15 +123,17 @@ curl -sf -X POST "${GRAFANA_URL}/api/v1/provisioning/alert-rules" \
       }
     }
   ],
-  "labels": {"severity": "warning"},
+  "labels": {"severity": "critical"},
   "annotations": {
-    "summary": "Canary pod is restarting frequently",
-    "description": "The canary pod in the alerting namespace has restarted more than once in the last 5 minutes."
+    "summary": "candidate-api availability has dropped below 99.9%",
+    "description": "The candidate-api is returning 5xx errors. Availability SLO is being violated. Automated rollback is available via approval link.",
+    "runbook_url": "http://13.216.126.57:30080/pending"
   }
 }
 EOF
-)" && echo " -> OK"
+)" && echo " -> OK" || echo " -> Already exists or failed, continuing..."
 
 echo ""
 echo "=== Grafana Alerting Configured ==="
 echo "Check: ${GRAFANA_URL}/alerting/list"
+echo "Runbook approvals: http://13.216.126.57:30080/pending"

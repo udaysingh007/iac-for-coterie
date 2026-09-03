@@ -24,6 +24,12 @@ data:
 
     pending_approvals = {}
 
+    REMEDIATION = {
+        "cmd": ["kubectl", "rollout", "undo", "deployment/candidate-api", "-n", "dev"],
+        "desc": "kubectl rollout undo deployment/candidate-api -n dev",
+        "summary": "Roll back candidate-api to previous known-good version",
+    }
+
     def generate_token(alert_id):
         raw = f"{alert_id}-{time.time()}-{uuid.uuid4().hex}"
         return hashlib.sha256(raw.encode()).hexdigest()[:32]
@@ -44,7 +50,7 @@ data:
         print(f"Running remediation for token {token}")
         try:
             result = subprocess.run(
-                ["kubectl", "rollout", "restart", "deployment/canary", "-n", "alerting"],
+                REMEDIATION["cmd"],
                 capture_output=True, text=True, timeout=30,
             )
             entry["status"] = "executed"
@@ -76,20 +82,20 @@ data:
                 }
 
                 approve_url = f"{CONTROLLER_EXTERNAL_URL}/approve/{token}"
-                subject = "Canary Alert - Approval Required for Remediation"
+                subject = "candidate-api Alert — Approval Required for Rollback"
                 body_html = f"""
-                <h2>Canary Pod Alert Fired</h2>
-                <p>The canary pod is experiencing restarts due to health check failures.</p>
+                <h2>candidate-api SLO Alert Fired</h2>
+                <p>Availability has dropped below the 99.9% SLO target.</p>
                 <p><strong>Alert ID:</strong> {alert_id}</p>
                 <p><strong>Time:</strong> {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}</p>
                 <h3>Proposed Remediation</h3>
-                <p><code>kubectl rollout restart deployment/canary -n alerting</code></p>
-                <p>This will restart the canary pod, restoring it to a healthy state.</p>
+                <p><code>{REMEDIATION['desc']}</code></p>
+                <p>{REMEDIATION['summary']}</p>
                 <br>
                 <a href="{approve_url}"
                    style="background-color:#28a745;color:white;padding:12px 24px;
                           text-decoration:none;border-radius:4px;font-size:16px;">
-                   Approve Remediation
+                   Approve Rollback
                 </a>
                 <br><br>
                 <p style="color:#666;font-size:12px;">
@@ -109,6 +115,38 @@ data:
         def do_GET(self):
             parsed = urlparse(self.path)
             path = parsed.path.rstrip("/")
+
+            # --- Pending approvals page (linked from Grafana alert annotation) ---
+            if path == "/pending":
+                rows = ""
+                for token, entry in sorted(pending_approvals.items(), key=lambda x: x[1]["created_at"], reverse=True):
+                    created = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(entry["created_at"]))
+                    status = entry["status"]
+                    if status == "pending":
+                        action = f'<a href="{CONTROLLER_EXTERNAL_URL}/approve/{token}" style="background-color:#28a745;color:white;padding:6px 16px;text-decoration:none;border-radius:4px;">Approve</a>'
+                    else:
+                        action = f'<span style="color:#6c757d;">{status}</span>'
+                    rows += f"<tr><td>{created}</td><td>{status}</td><td>{action}</td></tr>"
+
+                if not rows:
+                    rows = '<tr><td colspan="3" style="text-align:center;color:#888;">No alerts received yet</td></tr>'
+
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(f"""
+                <html><head><title>Runbook Controller</title></head>
+                <body style="font-family:sans-serif;max-width:700px;margin:40px auto;">
+                <h2>Runbook Controller — Pending Approvals</h2>
+                <p>Remediation: <code>{REMEDIATION['desc']}</code></p>
+                <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;width:100%;">
+                <tr style="background:#f0f0f0;"><th>Time</th><th>Status</th><th>Action</th></tr>
+                {rows}
+                </table>
+                <br><p style="color:#888;font-size:12px;">Auto-refreshes every 15s</p>
+                <script>setTimeout(()=>location.reload(), 15000);</script>
+                </body></html>
+                """.encode())
+                return
 
             if path.startswith("/approve/"):
                 token = path.split("/approve/", 1)[1]
@@ -145,10 +183,10 @@ data:
                 self.wfile.write(f"""
                 <html><body style="font-family:sans-serif;max-width:600px;margin:40px auto;">
                 <h2 style="color:{status_color};">
-                  Remediation {'Executed Successfully' if success else 'Failed'}
+                  Rollback {'Executed Successfully' if success else 'Failed'}
                 </h2>
                 <h3>Command:</h3>
-                <pre>kubectl rollout restart deployment/canary -n alerting</pre>
+                <pre>{REMEDIATION['desc']}</pre>
                 <h3>Output:</h3>
                 <pre>{output}</pre>
                 </body></html>
@@ -183,7 +221,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: runbook-controller
-  namespace: alerting
+  namespace: dev
 rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
@@ -196,7 +234,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: runbook-controller
-  namespace: alerting
+  namespace: dev
 subjects:
   - kind: ServiceAccount
     name: runbook-controller
