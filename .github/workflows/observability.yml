@@ -28,7 +28,7 @@ jobs:
           host: ${{ vars.VM_PUBLIC_IP }}
           username: ubuntu
           key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
-          source: "platform/observability/values.yaml,platform/observability/install.sh"
+          source: "platform/observability/*,platform/observability/dashboards/*"
           target: "/home/ubuntu/platform/"
           strip_components: 0
 
