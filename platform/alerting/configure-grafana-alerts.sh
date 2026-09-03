@@ -127,7 +127,7 @@ curl -sf -X POST "${GRAFANA_URL}/api/v1/provisioning/alert-rules" \
   "annotations": {
     "summary": "candidate-api availability has dropped below 99.9%",
     "description": "The candidate-api is returning 5xx errors. Availability SLO is being violated. Automated rollback is available via approval link.",
-    "runbook_url": "http://13.216.126.57:30080/pending"
+    "runbook_url": "http://13.216.126.57/runbook/pending"
   }
 }
 EOF
@@ -136,4 +136,4 @@ EOF
 echo ""
 echo "=== Grafana Alerting Configured ==="
 echo "Check: ${GRAFANA_URL}/alerting/list"
-echo "Runbook approvals: http://13.216.126.57:30080/pending"
+echo "Runbook approvals: http://13.216.126.57/runbook/pending"
