@@ -21,7 +21,7 @@ spec:
         # Error rate (5xx responses)
         - record: candidate_api:http_errors:rate5m
           expr: |
-            sum(rate(http_requests_received_total{exported_endpoint!~"/metrics|/health/.*",code=~"5.."}[5m]))
+            sum(rate(http_requests_received_total{exported_endpoint!~"/metrics|/health/.*",code=~"5.."}[5m])) or vector(0)
 
         # Availability SLI: fraction of successful (non-5xx) requests
         - record: candidate_api:availability:ratio5m
@@ -48,7 +48,7 @@ spec:
         - record: candidate_api:availability:burnrate1h
           expr: |
             1 - (
-              sum(rate(http_requests_received_total{exported_endpoint!~"/metrics|/health/.*",code=~"5.."}[1h]))
+              (sum(rate(http_requests_received_total{exported_endpoint!~"/metrics|/health/.*",code=~"5.."}[1h])) or vector(0))
               /
               sum(rate(http_requests_received_total{exported_endpoint!~"/metrics|/health/.*"}[1h]))
             )
@@ -56,7 +56,7 @@ spec:
         - record: candidate_api:availability:burnrate6h
           expr: |
             1 - (
-              sum(rate(http_requests_received_total{exported_endpoint!~"/metrics|/health/.*",code=~"5.."}[6h]))
+              (sum(rate(http_requests_received_total{exported_endpoint!~"/metrics|/health/.*",code=~"5.."}[6h])) or vector(0))
               /
               sum(rate(http_requests_received_total{exported_endpoint!~"/metrics|/health/.*"}[6h]))
             )
