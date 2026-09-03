@@ -82,7 +82,7 @@ data:
                 }
 
                 approve_url = f"{CONTROLLER_EXTERNAL_URL}/approve/{token}"
-                subject = "candidate-api Alert — Approval Required for Rollback"
+                subject = "candidate-api Alert - Approval Required for Rollback"
                 body_html = f"""
                 <h2>candidate-api SLO Alert Fired</h2>
                 <p>Availability has dropped below the 99.9% SLO target.</p>
@@ -136,7 +136,7 @@ data:
                 self.wfile.write(f"""
                 <html><head><title>Runbook Controller</title></head>
                 <body style="font-family:sans-serif;max-width:700px;margin:40px auto;">
-                <h2>Runbook Controller — Pending Approvals</h2>
+                <h2>Runbook Controller &mdash; Pending Approvals</h2>
                 <p>Remediation: <code>{REMEDIATION['desc']}</code></p>
                 <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;width:100%;">
                 <tr style="background:#f0f0f0;"><th>Time</th><th>Status</th><th>Action</th></tr>
