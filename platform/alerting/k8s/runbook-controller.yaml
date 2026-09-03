@@ -5,30 +5,55 @@ metadata:
   namespace: alerting
 data:
   app.py: |
-    """Runbook controller: receives Grafana webhook, emails approval link, runs kubectl on approval."""
+    """Runbook controller: receives Grafana webhook, emails approval link, reverts via GitHub API on approval."""
+    import base64
     import hashlib
     import json
     import os
+    import re
     import smtplib
-    import subprocess
     import time
     import uuid
     from email.mime.text import MIMEText
     from http.server import BaseHTTPRequestHandler, HTTPServer
     from urllib.parse import urlparse
+    from urllib.request import Request, urlopen
+    from urllib.error import HTTPError
 
     GMAIL_USER = os.environ["GMAIL_USER"]
     GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
     ALERT_RECIPIENT = os.environ.get("ALERT_RECIPIENT", GMAIL_USER)
     CONTROLLER_EXTERNAL_URL = os.environ["CONTROLLER_EXTERNAL_URL"]
+    GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
+    GITHUB_REPO = os.environ.get("GITHUB_REPO", "udaysingh007/sre-take-home")
+    GITHUB_BRANCH = os.environ.get("GITHUB_BRANCH", "main")
+    KUSTOMIZATION_PATH = "k8s/overlays/dev/kustomization.yaml"
 
     pending_approvals = {}
 
     REMEDIATION = {
-        "cmd": ["kubectl", "rollout", "undo", "deployment/candidate-api", "-n", "dev"],
-        "desc": "kubectl rollout undo deployment/candidate-api -n dev",
-        "summary": "Roll back candidate-api to previous known-good version",
+        "desc": "Revert dev image tag to previous version via GitHub API",
+        "summary": "Roll back candidate-api to the previous known-good image by updating the Git manifest (GitOps rollback)",
     }
+
+    def github_api(path, method="GET", data=None):
+        url = f"https://api.github.com/{path}"
+        headers = {
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github.v3+json",
+            "User-Agent": "runbook-controller",
+        }
+        body = None
+        if data:
+            headers["Content-Type"] = "application/json"
+            body = json.dumps(data).encode()
+        req = Request(url, data=body, headers=headers, method=method)
+        try:
+            with urlopen(req, timeout=30) as resp:
+                return json.loads(resp.read())
+        except HTTPError as e:
+            error_body = e.read().decode()
+            raise Exception(f"GitHub API {e.code}: {error_body}")
 
     def generate_token(alert_id):
         raw = f"{alert_id}-{time.time()}-{uuid.uuid4().hex}"
@@ -47,16 +72,61 @@ data:
 
     def run_remediation(token):
         entry = pending_approvals[token]
-        print(f"Running remediation for token {token}")
+        print(f"Running GitOps remediation for token {token}")
         try:
-            result = subprocess.run(
-                REMEDIATION["cmd"],
-                capture_output=True, text=True, timeout=30,
+            # 1. Get recent commits that modified the kustomization file
+            commits = github_api(
+                f"repos/{GITHUB_REPO}/commits?path={KUSTOMIZATION_PATH}&sha={GITHUB_BRANCH}&per_page=5"
+            )
+            if len(commits) < 2:
+                raise Exception("No previous commit found to roll back to")
+
+            # 2. Get the file content at the previous commit
+            prev_sha = commits[1]["sha"]
+            prev_file = github_api(
+                f"repos/{GITHUB_REPO}/contents/{KUSTOMIZATION_PATH}?ref={prev_sha}"
+            )
+            prev_content = base64.b64decode(prev_file["content"]).decode()
+
+            # Extract previous tag for the log message
+            prev_tag_match = re.search(r'newTag:\s*"?([^"\s]+)"?', prev_content)
+            prev_tag = prev_tag_match.group(1) if prev_tag_match else "unknown"
+
+            # 3. Get current file SHA (required by GitHub Contents API for updates)
+            current_file = github_api(
+                f"repos/{GITHUB_REPO}/contents/{KUSTOMIZATION_PATH}?ref={GITHUB_BRANCH}"
+            )
+            current_sha = current_file["sha"]
+
+            # 4. Commit the previous version of the file
+            update_data = {
+                "message": (
+                    f"fix: automated rollback — revert dev image to {prev_tag}\n\n"
+                    "Triggered by runbook-controller after SLO availability alert.\n\n"
+                    "[skip ci]"
+                ),
+                "content": base64.b64encode(prev_content.encode()).decode(),
+                "sha": current_sha,
+                "branch": GITHUB_BRANCH,
+            }
+            result = github_api(
+                f"repos/{GITHUB_REPO}/contents/{KUSTOMIZATION_PATH}",
+                method="PUT",
+                data=update_data,
+            )
+
+            new_commit = result["commit"]["sha"][:8]
+            output = (
+                f"Rolled back {KUSTOMIZATION_PATH} to image tag: {prev_tag}\n"
+                f"Based on previous commit: {prev_sha[:8]}\n"
+                f"New rollback commit: {new_commit}\n"
+                f"ArgoCD will auto-sync the change within ~3 minutes."
             )
             entry["status"] = "executed"
-            entry["result"] = result.stdout + result.stderr
-            print(f"Remediation result: {entry['result']}")
-            return True, entry["result"]
+            entry["result"] = output
+            print(f"Remediation succeeded: {output}")
+            return True, output
+
         except Exception as e:
             entry["status"] = "failed"
             entry["result"] = str(e)
@@ -65,7 +135,9 @@ data:
 
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):
-            if self.path == "/webhook":
+            # Strip /runbook prefix (Traefik middleware strips it, but handle both)
+            path = self.path.rstrip("/")
+            if path == "/webhook":
                 content_len = int(self.headers.get("Content-Length", 0))
                 body = self.rfile.read(content_len)
                 try:
@@ -82,13 +154,13 @@ data:
                 }
 
                 approve_url = f"{CONTROLLER_EXTERNAL_URL}/approve/{token}"
-                subject = "candidate-api Alert - Approval Required for Rollback"
+                subject = "candidate-api Alert — Approval Required for Rollback"
                 body_html = f"""
                 <h2>candidate-api SLO Alert Fired</h2>
                 <p>Availability has dropped below the 99.9% SLO target.</p>
                 <p><strong>Alert ID:</strong> {alert_id}</p>
                 <p><strong>Time:</strong> {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}</p>
-                <h3>Proposed Remediation</h3>
+                <h3>Proposed Remediation (GitOps)</h3>
                 <p><code>{REMEDIATION['desc']}</code></p>
                 <p>{REMEDIATION['summary']}</p>
                 <br>
@@ -116,14 +188,23 @@ data:
             parsed = urlparse(self.path)
             path = parsed.path.rstrip("/")
 
-            # --- Pending approvals page (linked from Grafana alert annotation) ---
             if path == "/pending":
                 rows = ""
-                for token, entry in sorted(pending_approvals.items(), key=lambda x: x[1]["created_at"], reverse=True):
-                    created = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(entry["created_at"]))
+                for token, entry in sorted(
+                    pending_approvals.items(),
+                    key=lambda x: x[1]["created_at"],
+                    reverse=True,
+                ):
+                    created = time.strftime(
+                        '%Y-%m-%d %H:%M:%S UTC', time.gmtime(entry["created_at"])
+                    )
                     status = entry["status"]
                     if status == "pending":
-                        action = f'<a href="{CONTROLLER_EXTERNAL_URL}/approve/{token}" style="background-color:#28a745;color:white;padding:6px 16px;text-decoration:none;border-radius:4px;">Approve</a>'
+                        action = (
+                            f'<a href="{CONTROLLER_EXTERNAL_URL}/approve/{token}" '
+                            f'style="background-color:#28a745;color:white;padding:6px 16px;'
+                            f'text-decoration:none;border-radius:4px;">Approve</a>'
+                        )
                     else:
                         action = f'<span style="color:#6c757d;">{status}</span>'
                     rows += f"<tr><td>{created}</td><td>{status}</td><td>{action}</td></tr>"
@@ -185,7 +266,7 @@ data:
                 <h2 style="color:{status_color};">
                   Rollback {'Executed Successfully' if success else 'Failed'}
                 </h2>
-                <h3>Command:</h3>
+                <h3>Remediation:</h3>
                 <pre>{REMEDIATION['desc']}</pre>
                 <h3>Output:</h3>
                 <pre>{output}</pre>
@@ -211,39 +292,6 @@ data:
         print(f"Runbook controller listening on :{port}")
         server.serve_forever()
 ---
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: runbook-controller
-  namespace: alerting
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: runbook-controller
-  namespace: dev
-rules:
-  - apiGroups: ["apps"]
-    resources: ["deployments"]
-    verbs: ["get", "patch"]
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["get", "list", "delete"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: runbook-controller
-  namespace: dev
-subjects:
-  - kind: ServiceAccount
-    name: runbook-controller
-    namespace: alerting
-roleRef:
-  kind: Role
-  name: runbook-controller
-  apiGroup: rbac.authorization.k8s.io
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -261,19 +309,6 @@ spec:
       labels:
         app: runbook-controller
     spec:
-      serviceAccountName: runbook-controller
-      initContainers:
-        - name: install-kubectl
-          image: alpine:3.20
-          command:
-            - sh
-            - -c
-            - |
-              wget -O /shared/kubectl "https://dl.k8s.io/release/$(wget -qO- https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-              chmod +x /shared/kubectl
-          volumeMounts:
-            - name: shared-bin
-              mountPath: /shared
       containers:
         - name: controller
           image: python:3.12-alpine
@@ -281,8 +316,6 @@ spec:
           ports:
             - containerPort: 8081
           env:
-            - name: PATH
-              value: "/shared:/usr/local/bin:/usr/bin:/bin"
             - name: GMAIL_USER
               value: "usingh@gmail.com"
             - name: ALERT_RECIPIENT
@@ -292,13 +325,20 @@ spec:
                 secretKeyRef:
                   name: gmail-credentials
                   key: app-password
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: github-credentials
+                  key: token
+            - name: GITHUB_REPO
+              value: "udaysingh007/sre-take-home"
+            - name: GITHUB_BRANCH
+              value: "main"
             - name: CONTROLLER_EXTERNAL_URL
-              value: "http://13.216.126.57:30080"
+              value: "http://13.216.126.57/runbook"
           volumeMounts:
             - name: script
               mountPath: /app
-            - name: shared-bin
-              mountPath: /shared
           resources:
             requests:
               cpu: 10m
@@ -310,8 +350,6 @@ spec:
         - name: script
           configMap:
             name: runbook-controller-script
-        - name: shared-bin
-          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -319,10 +357,39 @@ metadata:
   name: runbook-controller
   namespace: alerting
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: runbook-controller
   ports:
     - port: 8081
       targetPort: 8081
-      nodePort: 30080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: runbook-controller
+  namespace: alerting
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: alerting-strip-runbook-prefix@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: /runbook
+            pathType: Prefix
+            backend:
+              service:
+                name: runbook-controller
+                port:
+                  number: 8081
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-runbook-prefix
+  namespace: alerting
+spec:
+  stripPrefix:
+    prefixes:
+      - /runbook
