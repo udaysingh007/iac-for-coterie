@@ -16,12 +16,12 @@ spec:
         # Total requests (excluding /metrics and /health paths)
         - record: candidate_api:http_requests:rate5m
           expr: |
-            sum(rate(http_requests_received_total{endpoint!~"/metrics|/health/.*"}[5m]))
+            sum(rate(http_requests_received_total{exported_endpoint!~"/metrics|/health/.*"}[5m]))
 
         # Error rate (5xx responses)
         - record: candidate_api:http_errors:rate5m
           expr: |
-            sum(rate(http_requests_received_total{endpoint!~"/metrics|/health/.*",code=~"5.."}[5m]))
+            sum(rate(http_requests_received_total{exported_endpoint!~"/metrics|/health/.*",code=~"5.."}[5m]))
 
         # Availability SLI: fraction of successful (non-5xx) requests
         - record: candidate_api:availability:ratio5m
@@ -31,9 +31,9 @@ spec:
         # Latency SLI: fraction of requests completing within 500ms
         - record: candidate_api:latency_500ms:ratio5m
           expr: |
-            sum(rate(http_request_duration_seconds_bucket{endpoint!~"/metrics|/health/.*",le="0.512"}[5m]))
+            sum(rate(http_request_duration_seconds_bucket{exported_endpoint!~"/metrics|/health/.*",le="0.512"}[5m]))
             /
-            sum(rate(http_request_duration_seconds_count{endpoint!~"/metrics|/health/.*"}[5m]))
+            sum(rate(http_request_duration_seconds_count{exported_endpoint!~"/metrics|/health/.*"}[5m]))
 
     # -----------------------------------------------------------------
     # Burn rate recording rules (multi-window)
@@ -48,31 +48,31 @@ spec:
         - record: candidate_api:availability:burnrate1h
           expr: |
             1 - (
-              sum(rate(http_requests_received_total{endpoint!~"/metrics|/health/.*",code=~"5.."}[1h]))
+              sum(rate(http_requests_received_total{exported_endpoint!~"/metrics|/health/.*",code=~"5.."}[1h]))
               /
-              sum(rate(http_requests_received_total{endpoint!~"/metrics|/health/.*"}[1h]))
+              sum(rate(http_requests_received_total{exported_endpoint!~"/metrics|/health/.*"}[1h]))
             )
 
         - record: candidate_api:availability:burnrate6h
           expr: |
             1 - (
-              sum(rate(http_requests_received_total{endpoint!~"/metrics|/health/.*",code=~"5.."}[6h]))
+              sum(rate(http_requests_received_total{exported_endpoint!~"/metrics|/health/.*",code=~"5.."}[6h]))
               /
-              sum(rate(http_requests_received_total{endpoint!~"/metrics|/health/.*"}[6h]))
+              sum(rate(http_requests_received_total{exported_endpoint!~"/metrics|/health/.*"}[6h]))
             )
 
         # Latency burn rates
         - record: candidate_api:latency_500ms:burnrate1h
           expr: |
-            sum(rate(http_request_duration_seconds_bucket{endpoint!~"/metrics|/health/.*",le="0.512"}[1h]))
+            sum(rate(http_request_duration_seconds_bucket{exported_endpoint!~"/metrics|/health/.*",le="0.512"}[1h]))
             /
-            sum(rate(http_request_duration_seconds_count{endpoint!~"/metrics|/health/.*"}[1h]))
+            sum(rate(http_request_duration_seconds_count{exported_endpoint!~"/metrics|/health/.*"}[1h]))
 
         - record: candidate_api:latency_500ms:burnrate6h
           expr: |
-            sum(rate(http_request_duration_seconds_bucket{endpoint!~"/metrics|/health/.*",le="0.512"}[6h]))
+            sum(rate(http_request_duration_seconds_bucket{exported_endpoint!~"/metrics|/health/.*",le="0.512"}[6h]))
             /
-            sum(rate(http_request_duration_seconds_count{endpoint!~"/metrics|/health/.*"}[6h]))
+            sum(rate(http_request_duration_seconds_count{exported_endpoint!~"/metrics|/health/.*"}[6h]))
 
     # -----------------------------------------------------------------
     # Alerts — multi-window burn rate

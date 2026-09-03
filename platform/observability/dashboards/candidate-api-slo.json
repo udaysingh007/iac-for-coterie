@@ -162,7 +162,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "sum(increase(http_request_duration_seconds_bucket{endpoint!~\"/metrics|/health/.*\"}[$__rate_interval])) by (le)",
+          "expr": "sum(increase(http_request_duration_seconds_bucket{exported_endpoint!~\"/metrics|/health/.*\"}[$__rate_interval])) by (le)",
           "legendFormat": "{{le}}",
           "format": "heatmap"
         }
@@ -183,7 +183,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (endpoint, code) (rate(http_requests_received_total{endpoint!~\"/metrics|/health/.*\"}[5m]))",
+          "expr": "sum by (endpoint, code) (rate(http_requests_received_total{exported_endpoint!~\"/metrics|/health/.*\"}[5m]))",
           "legendFormat": "{{endpoint}} [{{code}}]"
         }
       ]
