@@ -1,0 +1,130 @@
+# kube-prometheus-stack Helm values
+# Stripped-down stable config for single-node k3s on r6i.xlarge.
+# Sidecars removed — datasource and dashboards provisioned statically.
+
+# -------------------------------------------------------------------------
+# Grafana
+# -------------------------------------------------------------------------
+grafana:
+  enabled: true
+  adminUser: admin
+  # adminPassword injected at deploy time via --set grafana.adminPassword
+
+  # Disable sidecars — they cause SQLite_BUSY contention with the main process.
+  # Datasource and dashboards are provisioned via static config files below.
+  sidecar:
+    dashboards:
+      enabled: false
+    datasources:
+      enabled: false
+
+  # Static Prometheus datasource — no sidecar needed.
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://kube-prometheus-stack-prometheus:9090
+          access: proxy
+          isDefault: true
+          jsonData:
+            timeInterval: 30s
+
+  # Load Node Exporter Full (gnet ID 1860) — shows real CPU/mem/disk/net
+  # data immediately since node-exporter is running on the same node.
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: default
+          orgId: 1
+          folder: ""
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/default
+
+  dashboards:
+    default:
+      node-exporter-full:
+        gnetId: 1860
+        revision: 37
+        datasource: Prometheus
+      kubernetes-cluster:
+        gnetId: 7249
+        revision: 1
+        datasource: Prometheus
+
+  grafana.ini:
+    server:
+      root_url: "%(protocol)s://%(domain)s/"
+      serve_from_sub_path: false
+    database:
+      wal: true
+    feature_toggles:
+      kubernetesDashboards: false
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Traefik Ingress — http://<VM_PUBLIC_IP>/
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: web
+    hosts:
+      - ""
+    paths:
+      - /
+    pathType: Prefix
+
+# -------------------------------------------------------------------------
+# Prometheus
+# -------------------------------------------------------------------------
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+    replicas: 1
+    storageSpec: {}
+
+# -------------------------------------------------------------------------
+# Alertmanager — not needed for this assessment
+# -------------------------------------------------------------------------
+alertmanager:
+  enabled: false
+
+# -------------------------------------------------------------------------
+# Supporting exporters
+# -------------------------------------------------------------------------
+nodeExporter:
+  enabled: true
+
+kubeStateMetrics:
+  enabled: true
+
+# k3s does not expose these endpoints — disable to avoid broken scrape targets
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
