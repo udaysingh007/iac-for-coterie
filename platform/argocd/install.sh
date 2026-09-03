@@ -32,10 +32,19 @@ helm upgrade --install argocd argo/argo-cd \
   --timeout 10m
 
 echo "==> Setting admin password"
-BCRYPT_HASH=$(htpasswd -nbBC 10 "" "$ARGOCD_PASSWORD" | tr -d ':\n' | sed 's/$2y/$2a/')
-kubectl -n "$NAMESPACE" patch secret argocd-secret \
-  -p "{\"stringData\": {\"admin.password\": \"$BCRYPT_HASH\", \"admin.passwordMtime\": \"$(date +%FT%T%Z)\"}}" \
-  2>/dev/null || true
+BCRYPT_HASH=$(python3 -c "
+import bcrypt, sys
+pw = sys.argv[1].encode()
+print(bcrypt.hashpw(pw, bcrypt.gensalt(rounds=10)).decode())
+" "$ARGOCD_PASSWORD" 2>/dev/null || true)
+
+if [ -n "$BCRYPT_HASH" ]; then
+  kubectl -n "$NAMESPACE" patch secret argocd-secret \
+    -p "{\"stringData\": {\"admin.password\": \"$BCRYPT_HASH\", \"admin.passwordMtime\": \"$(date +%FT%T%Z)\"}}" \
+    2>/dev/null || true
+else
+  echo "   (bcrypt not available — use initial password from argocd-initial-admin-secret)"
+fi
 
 echo "==> Applying ArgoCD Application manifests"
 kubectl apply -f "$(dirname "$0")/applications/"

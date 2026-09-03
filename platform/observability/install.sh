@@ -37,6 +37,22 @@ helm upgrade --install "$RELEASE" prometheus-community/kube-prometheus-stack \
   --timeout 10m
 
 echo ""
+echo "==> Applying Traefik ServiceMonitor"
+kubectl apply -f "$(dirname "$0")/traefik-servicemonitor.yaml"
+
+echo "==> Applying SLO recording rules & alerts"
+kubectl apply -f "$(dirname "$0")/slo-rules.yaml"
+
+echo "==> Provisioning candidate-api Grafana dashboard"
+SCRIPT_DIR="$(dirname "$0")"
+kubectl create configmap candidate-api-dashboard \
+  --namespace "$NAMESPACE" \
+  --from-file=candidate-api-slo.json="$SCRIPT_DIR/dashboards/candidate-api-slo.json" \
+  --dry-run=client -o yaml | \
+  kubectl label --local -f - grafana_dashboard=1 -o yaml --dry-run=client | \
+  kubectl apply -f -
+
+echo ""
 echo "==> Done. Waiting for Grafana pod to be ready..."
 kubectl rollout status deployment/"$RELEASE-grafana" \
   --namespace "$NAMESPACE" \

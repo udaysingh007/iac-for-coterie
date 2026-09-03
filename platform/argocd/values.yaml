@@ -4,19 +4,20 @@
 global:
   domain: ""
 
+configs:
+  params:
+    server.insecure: true
+    server.basehref: /argocd
+    server.rootpath: /argocd
+
 server:
-  insecure: true
-  extraArgs:
-    - --basehref=/argocd
-    - --rootpath=/argocd
 
   ingress:
     enabled: true
     ingressClassName: traefik
     annotations:
       traefik.ingress.kubernetes.io/router.entrypoints: web
-    paths:
-      - /argocd
+    path: /argocd
     pathType: Prefix
 
   resources:
