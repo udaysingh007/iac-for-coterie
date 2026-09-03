@@ -1,0 +1,113 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: candidate-api-slos
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    # -----------------------------------------------------------------
+    # Recording rules — pre-compute SLI values for dashboard + alerting
+    # -----------------------------------------------------------------
+    - name: candidate-api.sli.recording
+      interval: 30s
+      rules:
+        # Total requests (excluding /metrics and /health paths)
+        - record: candidate_api:http_requests:rate5m
+          expr: |
+            sum(rate(http_requests_received_total{endpoint!~"/metrics|/health/.*"}[5m]))
+
+        # Error rate (5xx responses)
+        - record: candidate_api:http_errors:rate5m
+          expr: |
+            sum(rate(http_requests_received_total{endpoint!~"/metrics|/health/.*",code=~"5.."}[5m]))
+
+        # Availability SLI: fraction of successful (non-5xx) requests
+        - record: candidate_api:availability:ratio5m
+          expr: |
+            1 - (candidate_api:http_errors:rate5m / candidate_api:http_requests:rate5m)
+
+        # Latency SLI: fraction of requests completing within 500ms
+        - record: candidate_api:latency_500ms:ratio5m
+          expr: |
+            sum(rate(http_request_duration_seconds_bucket{endpoint!~"/metrics|/health/.*",le="0.512"}[5m]))
+            /
+            sum(rate(http_request_duration_seconds_count{endpoint!~"/metrics|/health/.*"}[5m]))
+
+    # -----------------------------------------------------------------
+    # Burn rate recording rules (multi-window)
+    # SLO targets:
+    #   Availability: 99.9%  (error budget = 0.1%)
+    #   Latency:      95.0%  (error budget = 5.0%)
+    # -----------------------------------------------------------------
+    - name: candidate-api.slo.burnrate
+      interval: 30s
+      rules:
+        # Availability burn rates
+        - record: candidate_api:availability:burnrate1h
+          expr: |
+            1 - (
+              sum(rate(http_requests_received_total{endpoint!~"/metrics|/health/.*",code=~"5.."}[1h]))
+              /
+              sum(rate(http_requests_received_total{endpoint!~"/metrics|/health/.*"}[1h]))
+            )
+
+        - record: candidate_api:availability:burnrate6h
+          expr: |
+            1 - (
+              sum(rate(http_requests_received_total{endpoint!~"/metrics|/health/.*",code=~"5.."}[6h]))
+              /
+              sum(rate(http_requests_received_total{endpoint!~"/metrics|/health/.*"}[6h]))
+            )
+
+        # Latency burn rates
+        - record: candidate_api:latency_500ms:burnrate1h
+          expr: |
+            sum(rate(http_request_duration_seconds_bucket{endpoint!~"/metrics|/health/.*",le="0.512"}[1h]))
+            /
+            sum(rate(http_request_duration_seconds_count{endpoint!~"/metrics|/health/.*"}[1h]))
+
+        - record: candidate_api:latency_500ms:burnrate6h
+          expr: |
+            sum(rate(http_request_duration_seconds_bucket{endpoint!~"/metrics|/health/.*",le="0.512"}[6h]))
+            /
+            sum(rate(http_request_duration_seconds_count{endpoint!~"/metrics|/health/.*"}[6h]))
+
+    # -----------------------------------------------------------------
+    # Alerts — multi-window burn rate
+    # -----------------------------------------------------------------
+    - name: candidate-api.slo.alerts
+      rules:
+        # Availability: fires when 1h burn rate drops below target AND 6h confirms trend
+        - alert: CandidateApiHighErrorBurnRate
+          expr: |
+            candidate_api:availability:burnrate1h < 0.999
+            and
+            candidate_api:availability:burnrate6h < 0.999
+          for: 5m
+          labels:
+            severity: critical
+            slo: availability
+          annotations:
+            summary: "candidate-api error budget burn rate is high"
+            description: |
+              Availability SLO (99.9%) is being violated.
+              1h availability: {{ $value | humanizePercentage }}
+              Error budget will be exhausted if this continues.
+
+        # Latency: fires when 1h burn rate drops below target AND 6h confirms trend
+        - alert: CandidateApiHighLatencyBurnRate
+          expr: |
+            candidate_api:latency_500ms:burnrate1h < 0.95
+            and
+            candidate_api:latency_500ms:burnrate6h < 0.95
+          for: 5m
+          labels:
+            severity: warning
+            slo: latency
+          annotations:
+            summary: "candidate-api latency SLO burn rate is high"
+            description: |
+              Latency SLO (95% < 500ms) is being violated.
+              1h ratio within budget: {{ $value | humanizePercentage }}

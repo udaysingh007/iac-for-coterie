@@ -10,11 +10,14 @@ grafana:
   adminUser: admin
   # adminPassword injected at deploy time via --set grafana.adminPassword
 
-  # Disable sidecars — they cause SQLite_BUSY contention with the main process.
-  # Datasource and dashboards are provisioned via static config files below.
+  # Datasource sidecar disabled — provisioned statically below.
+  # Dashboard sidecar enabled — picks up ConfigMaps with grafana_dashboard=1 label.
   sidecar:
     dashboards:
-      enabled: false
+      enabled: true
+      label: grafana_dashboard
+      folder: /tmp/dashboards
+      searchNamespace: monitoring
     datasources:
       enabled: false
 
@@ -101,6 +104,10 @@ prometheus:
         memory: 2Gi
     replicas: 1
     storageSpec: {}
+    # Discover PodMonitors and ServiceMonitors from all namespaces
+    podMonitorNamespaceSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    ruleNamespaceSelector: {}
 
 # -------------------------------------------------------------------------
 # Alertmanager — not needed for this assessment
