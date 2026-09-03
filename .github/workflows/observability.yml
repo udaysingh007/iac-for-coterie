@@ -1,6 +1,10 @@
 name: Platform — Observability Stack
 
 on:
+  workflow_run:
+    workflows: ["Terraform — Infra"]
+    types: [completed]
+    branches: [main]
   push:
     branches: [main]
     paths:
@@ -18,13 +22,14 @@ on:
 jobs:
   deploy:
     name: ${{ github.event.inputs.action || 'deploy' }} kube-prometheus-stack
+    if: >
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Copy values file to VM
+      - name: Copy files to VM
         uses: appleboy/scp-action@v1
         with:
           host: ${{ vars.VM_PUBLIC_IP }}
@@ -34,7 +39,7 @@ jobs:
           target: "/home/ubuntu/platform/"
           strip_components: 0
 
-      - name: Deploy observability stack
+      - name: Deploy
         if: github.event.inputs.action != 'uninstall'
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -49,7 +54,7 @@ jobs:
         env:
           GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
 
-      - name: Uninstall observability stack
+      - name: Uninstall
         if: github.event.inputs.action == 'uninstall'
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -65,4 +70,3 @@ jobs:
         run: |
           echo "Grafana: http://${{ vars.VM_PUBLIC_IP }}/"
           echo "Username: admin"
-          echo "Password: (GRAFANA_ADMIN_PASSWORD secret)"

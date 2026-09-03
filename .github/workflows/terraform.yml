@@ -1,12 +1,12 @@
 name: Terraform — Infra
 
 on:
-  push:
-    branches: [main]
+  pull_request:
     paths:
       - "terraform/infra/**"
       - ".github/workflows/terraform.yml"
-  pull_request:
+  push:
+    branches: [main]
     paths:
       - "terraform/infra/**"
       - ".github/workflows/terraform.yml"
@@ -20,109 +20,77 @@ on:
         options: [plan, apply, destroy]
 
 permissions:
-  id-token: write   # required for OIDC token issuance
-  contents: write   # required to push updated terraform.tfstate back to the repo
-  pull-requests: write
+  contents: write
 
 env:
   TF_DIR: terraform/infra
   TF_VAR_admin_ssh_public_key: ${{ secrets.ADMIN_SSH_PUBLIC_KEY }}
 
 jobs:
-  # ------------------------------------------------------------------
-  # PR check — no AWS creds needed, just lint and validate
-  # ------------------------------------------------------------------
   validate:
-    name: Terraform Validate
+    name: Validate
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v4
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "~1.5"
 
-      - name: Terraform Init
+      - name: Init
         working-directory: ${{ env.TF_DIR }}
         run: terraform init -backend=false
 
-      - name: Terraform Format Check
+      - name: Format check
         working-directory: ${{ env.TF_DIR }}
         run: terraform fmt -check -recursive
 
-      - name: Terraform Validate
+      - name: Validate
         working-directory: ${{ env.TF_DIR }}
         run: terraform validate
 
-  # ------------------------------------------------------------------
-  # Push to main / workflow_dispatch — full plan + apply
-  # ------------------------------------------------------------------
-  terraform:
-    name: Terraform ${{ github.event.inputs.action || 'apply' }}
+  deploy:
+    name: ${{ github.event.inputs.action || 'apply' }}
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v5
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v4
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "~1.5"
 
-      - name: Terraform Init
+      - name: Init
         working-directory: ${{ env.TF_DIR }}
         run: terraform init
 
-      - name: Terraform Format Check
+      - name: Plan
         working-directory: ${{ env.TF_DIR }}
-        run: terraform fmt -check -recursive
-        continue-on-error: true
+        run: terraform plan -out=tfplan -input=false -no-color
 
-      - name: Terraform Validate
-        working-directory: ${{ env.TF_DIR }}
-        run: terraform validate
-
-      - name: Terraform Plan
-        id: plan
-        working-directory: ${{ env.TF_DIR }}
-        run: |
-          terraform plan \
-            -out=tfplan \
-            -input=false \
-            -no-color 2>&1 | tee plan.txt
-
-      - name: Terraform Apply
-        if: >
-          github.event.inputs.action == 'apply' ||
-          (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      - name: Apply
+        if: github.event.inputs.action != 'destroy'
         working-directory: ${{ env.TF_DIR }}
         run: terraform apply -auto-approve -input=false tfplan
 
-      - name: Terraform Destroy
+      - name: Destroy
         if: github.event.inputs.action == 'destroy'
         working-directory: ${{ env.TF_DIR }}
         run: terraform destroy -auto-approve -input=false
 
-      - name: Commit updated Terraform state
-        if: >
-          github.event.inputs.action == 'apply' ||
-          github.event.inputs.action == 'destroy' ||
-          (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      - name: Commit state
+        if: github.event.inputs.action != 'plan'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -135,9 +103,7 @@ jobs:
             git push origin main
           fi
 
-      - name: Show Outputs
-        if: >
-          github.event.inputs.action == 'apply' ||
-          (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      - name: Outputs
+        if: github.event.inputs.action != 'destroy'
         working-directory: ${{ env.TF_DIR }}
         run: terraform output
