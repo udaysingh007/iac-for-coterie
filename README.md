@@ -26,6 +26,9 @@
 
 # Screenshots
 
+### High-level architecture/ block diagram
+![Architecture Diagram](doc/images/architecture-diagram.png)
+
 ### AWS EC2 Instance (with launch time - Sep 1st, 2026 @11pm EST)
 ![AWS VM Instance](doc/images/aws-vm-screenshot.png)
 
