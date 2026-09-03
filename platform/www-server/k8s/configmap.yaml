@@ -14,19 +14,26 @@ data:
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-        .container { max-width: 720px; width: 100%; padding: 2rem; }
+        .container { max-width: 900px; width: 100%; padding: 2rem; }
         h1 { font-size: 1.8rem; margin-bottom: 0.5rem; color: #f8fafc; }
         .subtitle { color: #94a3b8; margin-bottom: 2rem; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-        .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; text-decoration: none; color: inherit; transition: border-color 0.2s, transform 0.2s; }
+        .panels { display: flex; flex-direction: column; gap: 1.5rem; }
+        .panel { background: #1a2332; border: 1px solid #2d3d50; border-radius: 14px; padding: 1.25rem; }
+        .panel-title { font-size: 0.85rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; }
+        .panel-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 1.25rem; text-decoration: none; color: inherit; transition: border-color 0.2s, transform 0.2s; }
         .card:hover { border-color: #60a5fa; transform: translateY(-2px); }
-        .card-icon { margin-bottom: 0.75rem; height: 40px; display: flex; align-items: center; }
-        .card-icon img { height: 36px; width: auto; }
-        .card-icon span { font-size: 2rem; }
-        .card-title { font-size: 1.1rem; font-weight: 600; color: #f1f5f9; margin-bottom: 0.25rem; }
-        .card-desc { font-size: 0.85rem; color: #94a3b8; }
+        .card-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; }
+        .card-header span { font-size: 1.4rem; }
+        .card-header img { height: 28px; width: auto; }
+        .card-title { font-size: 1.05rem; font-weight: 600; color: #f1f5f9; }
+        .card-desc { font-size: 0.8rem; color: #94a3b8; margin-bottom: 0.75rem; }
+        .endpoints { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+        .endpoint { font-size: 0.75rem; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 0.3rem 0.6rem; color: #60a5fa; text-decoration: none; font-family: monospace; transition: background 0.15s, border-color 0.15s; }
+        .endpoint:hover { background: #1e293b; border-color: #60a5fa; }
         .env-dev { border-left: 3px solid #22c55e; }
         .env-test { border-left: 3px solid #f59e0b; }
+        .alert-card { border-left: 3px solid #ef4444; }
         .footer { margin-top: 2rem; text-align: center; color: #475569; font-size: 0.8rem; }
       </style>
     </head>
@@ -34,32 +41,49 @@ data:
       <div class="container">
         <h1>Coterie Platform</h1>
         <p class="subtitle">SRE Take-Home Assessment &mdash; Infrastructure Dashboard</p>
-        <div class="grid">
-          <a href="/grafana" class="card">
-            <div class="card-icon"><img src="/grafana/public/img/grafana_icon.svg" alt="Grafana"></div>
-            <div class="card-title">Grafana</div>
-            <div class="card-desc">Monitoring dashboards, metrics, and SLO tracking</div>
-          </a>
-          <a href="/argocd" class="card">
-            <div class="card-icon"><img src="/argocd/assets/images/logo.png" alt="ArgoCD"></div>
-            <div class="card-title">ArgoCD</div>
-            <div class="card-desc">GitOps continuous delivery and deployment status</div>
-          </a>
-          <a href="/dev/" class="card env-dev">
-            <div class="card-icon"><span>&#x1F6A7;</span></div>
-            <div class="card-title">Dev Environment</div>
-            <div class="card-desc">Candidate API &mdash; development deployment</div>
-          </a>
-          <a href="/test/" class="card env-test">
-            <div class="card-icon"><span>&#x2705;</span></div>
-            <div class="card-title">Test Environment</div>
-            <div class="card-desc">Candidate API &mdash; promoted/validated build</div>
-          </a>
-          <a href="/runbook/pending" class="card" style="border-left: 3px solid #ef4444;">
-            <div class="card-icon"><span>&#x1F6A8;</span></div>
-            <div class="card-title">Alert Approvals</div>
-            <div class="card-desc">Alerts requiring manual review and approval for remediation</div>
-          </a>
+        <div class="panels">
+          <div class="panel">
+            <div class="panel-title">API Deployed Environments</div>
+            <div class="panel-cards">
+              <div class="card env-dev">
+                <div class="card-header"><span>&#x1F6A7;</span><div class="card-title">Dev Environment</div></div>
+                <div class="card-desc">Candidate API &mdash; development deployment</div>
+                <div class="endpoints">
+                  <a href="http://13.216.126.57/dev/" class="endpoint">/</a>
+                  <a href="http://13.216.126.57/dev/health/live" class="endpoint">/health/live</a>
+                  <a href="http://13.216.126.57/dev/health/ready" class="endpoint">/health/ready</a>
+                  <a href="http://13.216.126.57/dev/api/work-items" class="endpoint">/api/work-items</a>
+                </div>
+              </div>
+              <div class="card env-test">
+                <div class="card-header"><span>&#x2705;</span><div class="card-title">Test Environment</div></div>
+                <div class="card-desc">Candidate API &mdash; promoted/validated build</div>
+                <div class="endpoints">
+                  <a href="http://13.216.126.57/test/" class="endpoint">/</a>
+                  <a href="http://13.216.126.57/test/health/live" class="endpoint">/health/live</a>
+                  <a href="http://13.216.126.57/test/health/ready" class="endpoint">/health/ready</a>
+                  <a href="http://13.216.126.57/test/api/work-items" class="endpoint">/api/work-items</a>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">Metrics, Alerts &amp; Infra Tools</div>
+            <div class="panel-cards">
+              <a href="/grafana" class="card">
+                <div class="card-header"><img src="/grafana/public/img/grafana_icon.svg" alt="Grafana"><div class="card-title">Grafana</div></div>
+                <div class="card-desc">Monitoring dashboards, metrics, and SLO tracking</div>
+              </a>
+              <a href="/argocd" class="card">
+                <div class="card-header"><img src="/argocd/assets/images/logo.png" alt="ArgoCD"><div class="card-title">ArgoCD</div></div>
+                <div class="card-desc">GitOps continuous delivery and deployment status</div>
+              </a>
+              <a href="/runbook/pending" class="card alert-card">
+                <div class="card-header"><span>&#x1F6A8;</span><div class="card-title">Alert Approvals</div></div>
+                <div class="card-desc">Alerts requiring manual review and approval for remediation</div>
+              </a>
+            </div>
+          </div>
         </div>
         <div class="footer">k3s on AWS EC2 &bull; Prometheus + Grafana &bull; ArgoCD</div>
       </div>
