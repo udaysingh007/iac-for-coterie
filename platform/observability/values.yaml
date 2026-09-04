@@ -34,6 +34,14 @@ grafana:
           isDefault: true
           jsonData:
             timeInterval: 30s
+        - name: Loki
+          uid: loki
+          type: loki
+          url: http://loki-gateway.monitoring.svc.cluster.local
+          access: proxy
+          isDefault: false
+          jsonData:
+            maxLines: 1000
 
   # Load Node Exporter Full (gnet ID 1860) — shows real CPU/mem/disk/net
   # data immediately since node-exporter is running on the same node.
@@ -60,6 +68,10 @@ grafana:
         gnetId: 7249
         revision: 1
         datasource: Prometheus
+      loki-logs:
+        gnetId: 13639
+        revision: 2
+        datasource: Loki
 
   grafana.ini:
     server:
