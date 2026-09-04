@@ -68,10 +68,6 @@ grafana:
         gnetId: 7249
         revision: 1
         datasource: Prometheus
-      loki-logs:
-        gnetId: 13639
-        revision: 2
-        datasource: Loki
 
   grafana.ini:
     server:

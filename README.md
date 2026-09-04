@@ -5,7 +5,7 @@
 3. The cluster hosts Prometheus and Grafana for metrics collection, dashboards, SLO tracking, and alerting.
 4. ArgoCD is deployed as the continuous delivery agent, pulling updated Kubernetes manifests directly from the [sre-take-home](https://github.com/udaysingh007/sre-take-home) GitHub repo. This GitOps approach avoids SSH access or kubectl exposure to GitHub Actions, which would be more intrusive and less elegant.
 6. Two namespaces — `dev` and `test` — host the .NET API service, deployed via the sre-take-home CI workflows through ArgoCD.
-7. ArgoCD also provides per-pod log access; for this assessment that is sufficient, but logging can be expanded for longer-term retention.
+7. ArgoCD also provides per-pod log access; for this assessment that is sufficient, but logging can be expanded for longer-term retention. Loki and Promtail are deployed as well and feed into grafana as datasource.
 8. A synthetic monitor pod continuously hits the API endpoints, generating metrics such as response times and request rates.
 9. A runbook-controller pod automates incident response — specifically, reverting a bad deployment via the GitHub API when post-deploy health checks fail.
 10. A landing-page web server (nginx) provides a single entry point with links to all deployed environments and platform tools.

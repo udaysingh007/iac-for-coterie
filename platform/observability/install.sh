@@ -52,6 +52,14 @@ kubectl create configmap candidate-api-dashboard \
   kubectl label --local -f - grafana_dashboard=1 -o yaml --dry-run=client | \
   kubectl apply -f -
 
+echo "==> Provisioning Loki logs Grafana dashboard"
+kubectl create configmap loki-logs-dashboard \
+  --namespace "$NAMESPACE" \
+  --from-file=loki-logs.json="$SCRIPT_DIR/dashboards/loki-logs.json" \
+  --dry-run=client -o yaml | \
+  kubectl label --local -f - grafana_dashboard=1 -o yaml --dry-run=client | \
+  kubectl apply -f -
+
 echo ""
 echo "==> Done. Waiting for Grafana pod to be ready..."
 kubectl rollout status deployment/"$RELEASE-grafana" \
