@@ -1,0 +1,56 @@
+name: Platform — Loki Log Aggregation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "platform/loki/**"
+      - ".github/workflows/loki.yml"
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Action to run"
+        required: true
+        default: "deploy"
+        type: choice
+        options: [deploy, uninstall]
+
+jobs:
+  deploy:
+    name: ${{ github.event.inputs.action || 'deploy' }} loki + promtail
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy files to VM
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ vars.VM_PUBLIC_IP }}
+          username: ubuntu
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          source: "platform/loki/*"
+          target: "/home/ubuntu/platform/"
+          strip_components: 0
+
+      - name: Deploy
+        if: github.event.inputs.action != 'uninstall'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ vars.VM_PUBLIC_IP }}
+          username: ubuntu
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          command_timeout: 10m
+          script: |
+            chmod +x /home/ubuntu/platform/platform/loki/install.sh
+            bash /home/ubuntu/platform/platform/loki/install.sh
+
+      - name: Uninstall
+        if: github.event.inputs.action == 'uninstall'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ vars.VM_PUBLIC_IP }}
+          username: ubuntu
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          script: |
+            helm uninstall promtail --namespace monitoring || true
+            helm uninstall loki --namespace monitoring || true

@@ -1,0 +1,5 @@
+# Promtail Helm values — ships container logs to Loki.
+
+config:
+  clients:
+    - url: http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
