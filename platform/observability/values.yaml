@@ -78,6 +78,11 @@ grafana:
     feature_toggles:
       kubernetesDashboards: false
 
+  persistence:
+    enabled: true
+    size: 2Gi
+    storageClassName: local-path
+
   resources:
     requests:
       cpu: 100m

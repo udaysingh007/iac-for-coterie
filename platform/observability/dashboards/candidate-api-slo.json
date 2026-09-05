@@ -189,10 +189,6 @@
         {
           "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{exported_endpoint!~\"/metrics|/health/.*\"}[$__rate_interval])) by (le))",
           "legendFormat": "p99"
-        },
-        {
-          "expr": "0.5",
-          "legendFormat": "SLO Threshold (500ms)"
         }
       ]
     },
@@ -210,7 +206,7 @@
       ],
       "options": {
         "calculate": false,
-        "yAxis": { "unit": "s" }
+        "yAxis": { "unit": "s", "max": 0.1 }
       }
     },
     {
